@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#58CC02" />
+  <meta name="description" content="Practica las tablas de multiplicar al estilo Duolingo. Divertido, responsive y gamificado." />
+  <title>MathLingo · Tablas de multiplicar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%89%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Top status bar -->
+    <header class="top-bar" id="topBar">
+      <button class="icon-btn" id="homeBtn" title="Inicio" aria-label="Inicio">
+        <span class="icon-emoji">🏠</span>
+      </button>
+      <div class="stats">
+        <div class="stat streak" title="Racha diaria">
+          <span class="icon-emoji">🔥</span>
+          <span id="streakCount">0</span>
+        </div>
+        <div class="stat xp" title="Puntos de experiencia">
+          <span class="icon-emoji">⭐</span>
+          <span id="xpCount">0</span>
+        </div>
+        <div class="stat hearts" title="Vidas">
+          <span class="icon-emoji">❤️</span>
+          <span id="heartsCount">5</span>
+        </div>
+      </div>
+      <button class="icon-btn" id="settingsBtn" title="Ajustes" aria-label="Ajustes">
+        <span class="icon-emoji">⚙️</span>
+      </button>
+    </header>
+
+    <!-- Welcome / Onboarding -->
+    <section class="screen" id="welcomeScreen">
+      <div class="welcome">
+        <div class="mascot xl">🦉</div>
+        <h1 class="hero-title">¡Hola! Soy <span class="accent">Buho</span></h1>
+        <p class="hero-sub">Vamos a dominar las tablas de multiplicar paso a paso. ¿Cómo te llamas?</p>
+        <input class="name-input" id="nameInput" maxlength="16" placeholder="Escribe tu nombre" autocomplete="off" />
+        <button class="btn btn-primary" id="startBtn">¡Empezar!</button>
+      </div>
+    </section>
+
+    <!-- Home screen -->
+    <section class="screen" id="homeScreen">
+      <div class="home-greeting">
+        <div class="mascot" id="homeMascot">🦉</div>
+        <div>
+          <h1 class="greeting">¡Hola, <span id="helloName">amigo</span>!</h1>
+          <p class="sub">Nivel <span id="levelLabel">1</span> · ¡Sigamos aprendiendo!</p>
+        </div>
+      </div>
+
+      <div class="card daily-goal">
+        <div class="daily-text">
+          <div class="daily-title">Meta diaria</div>
+          <div class="daily-sub"><span id="dailyXp">0</span> / 30 XP hoy</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-bar-fill" id="dailyProgress" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="section-title">
+        <span>Modos rápidos</span>
+      </div>
+      <div class="quick-modes">
+        <button class="quick-mode purple" data-mode="mixed">
+          <span class="icon-emoji big">🎲</span>
+          <span class="qm-label">Mezcla</span>
+          <span class="qm-sub">Tablas variadas</span>
+        </button>
+        <button class="quick-mode blue" data-mode="timed">
+          <span class="icon-emoji big">⚡</span>
+          <span class="qm-label">Reto</span>
+          <span class="qm-sub">60 segundos</span>
+        </button>
+        <button class="quick-mode orange" data-mode="boss">
+          <span class="icon-emoji big">🐉</span>
+          <span class="qm-label">Jefe</span>
+          <span class="qm-sub">Reto final</span>
+        </button>
+      </div>
+
+      <div class="section-title">
+        <span>Tablas de multiplicar</span>
+        <button class="link-btn" id="viewAchievements">🏆 Logros</button>
+      </div>
+      <div class="tables-grid" id="tablesGrid"></div>
+
+      <div class="footer-tip">
+        <span class="icon-emoji">💡</span>
+        <span>Practica un poco cada día para mantener tu racha</span>
+      </div>
+    </section>
+
+    <!-- Game screen -->
+    <section class="screen game" id="gameScreen">
+      <div class="game-header">
+        <button class="close-btn" id="closeGameBtn" aria-label="Cerrar">✕</button>
+        <div class="progress-bar game-progress">
+          <div class="progress-bar-fill" id="gameProgress" style="width: 0%"></div>
+        </div>
+        <div class="hearts-mini">
+          <span class="icon-emoji">❤️</span>
+          <span id="gameHearts">5</span>
+        </div>
+      </div>
+
+      <div class="combo" id="combo" hidden>
+        <span class="combo-flame">🔥</span>
+        <span><span id="comboCount">0</span> seguidas</span>
+      </div>
+
+      <div class="timer" id="timerBox" hidden>
+        <span class="icon-emoji">⏱️</span>
+        <span id="timerValue">60</span>s
+      </div>
+
+      <div class="question-area" id="questionArea"></div>
+
+      <div class="game-footer">
+        <button class="btn btn-primary" id="checkBtn" disabled>Comprobar</button>
+      </div>
+
+      <!-- Feedback -->
+      <div class="feedback" id="feedback" hidden>
+        <div class="feedback-content">
+          <div class="feedback-emoji" id="feedbackEmoji">🎉</div>
+          <div class="feedback-text">
+            <div class="feedback-title" id="feedbackTitle">¡Genial!</div>
+            <div class="feedback-sub" id="feedbackSub"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="continueBtn">Continuar</button>
+      </div>
+    </section>
+
+    <!-- Result screen -->
+    <section class="screen result" id="resultScreen">
+      <div class="result-hero">
+        <div class="mascot xl" id="resultMascot">🎉</div>
+        <h1 class="result-title" id="resultTitle">¡Lección completada!</h1>
+        <p class="result-sub" id="resultSub">Sigue así, lo estás haciendo genial.</p>
+      </div>
+      <div class="result-stats">
+        <div class="stat-card xp">
+          <div class="label">⭐ XP ganada</div>
+          <div class="value" id="resultXp">0</div>
+        </div>
+        <div class="stat-card accuracy">
+          <div class="label">🎯 Acierto</div>
+          <div class="value" id="resultAccuracy">0%</div>
+        </div>
+        <div class="stat-card combo">
+          <div class="label">🔥 Mejor combo</div>
+          <div class="value" id="resultCombo">0</div>
+        </div>
+        <div class="stat-card time">
+          <div class="label">⏱️ Tiempo</div>
+          <div class="value" id="resultTime">0s</div>
+        </div>
+      </div>
+      <div class="result-actions">
+        <button class="btn btn-secondary" id="resultRetry">Repetir</button>
+        <button class="btn btn-primary" id="resultContinue">Continuar</button>
+      </div>
+    </section>
+
+    <!-- Achievements -->
+    <section class="screen" id="achievementsScreen">
+      <div class="sub-header">
+        <button class="close-btn" id="closeAchievementsBtn" aria-label="Volver">←</button>
+        <h2>🏆 Logros</h2>
+      </div>
+      <div class="achievements" id="achievementsList"></div>
+    </section>
+
+    <!-- Out of hearts -->
+    <section class="screen" id="noHeartsScreen">
+      <div class="welcome">
+        <div class="mascot xl">💔</div>
+        <h1 class="hero-title">¡Te quedaste sin vidas!</h1>
+        <p class="hero-sub">Descansa un poco o recarga vidas para seguir practicando.</p>
+        <button class="btn btn-primary" id="refillBtn">Recargar vidas 💖</button>
+        <button class="btn btn-secondary" id="backHomeBtn">Volver al inicio</button>
+      </div>
+    </section>
+
+    <!-- Settings modal -->
+    <div class="modal" id="settingsModal" hidden>
+      <div class="modal-content">
+        <h2>⚙️ Ajustes</h2>
+        <label class="setting-row">
+          <span>🔊 Sonido</span>
+          <input type="checkbox" id="soundToggle" checked />
+        </label>
+        <label class="setting-row">
+          <span>🎮 Vibración</span>
+          <input type="checkbox" id="vibrationToggle" checked />
+        </label>
+        <button class="btn btn-secondary" id="changeNameBtn">Cambiar nombre</button>
+        <button class="btn btn-danger" id="resetBtn">Reiniciar progreso</button>
+        <button class="btn btn-primary" id="closeSettingsBtn">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Confetti container -->
+    <div class="confetti-container" id="confettiContainer" aria-hidden="true"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
