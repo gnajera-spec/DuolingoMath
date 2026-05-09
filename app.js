@@ -51,19 +51,26 @@
 
   let state = loadState();
 
-  if (state.dailyDate !== todayStr()) {
-    state.dailyXp = 0;
-    state.dailyDate = todayStr();
-    saveState();
+  function maybeResetDaily() {
+    if (state.dailyDate !== todayStr()) {
+      state.dailyXp = 0;
+      state.dailyDate = todayStr();
+      saveState();
+      return true;
+    }
+    return false;
   }
+  maybeResetDaily();
 
   function maybeRefillHearts() {
-    if (state.hearts >= 5) return;
+    if (state.hearts >= 5) return false;
     const sinceLost = Date.now() - (state.heartsLostAt || 0);
     if (sinceLost > 30 * 60 * 1000) {
       state.hearts = 5;
       saveState();
+      return true;
     }
+    return false;
   }
   maybeRefillHearts();
 
@@ -72,6 +79,10 @@
   function getAudio() {
     if (!audioCtx) {
       try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+    }
+    // iOS Safari starts the context suspended; resume after a user gesture.
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
     }
     return audioCtx;
   }
@@ -112,7 +123,7 @@
     { id: 'master_5', icon: '🌟', title: 'Aprendiz', desc: 'Domina 5 tablas' },
     { id: 'master_all', icon: '👑', title: 'Maestro de las tablas', desc: 'Domina todas las tablas' },
     { id: 'no_hearts_win', icon: '💎', title: 'Sin errores', desc: 'Lección sin perder vidas' },
-    { id: 'speed', icon: '🚀', title: 'Velocista', desc: 'Termina el reto contrarreloj' },
+    { id: 'speed', icon: '🚀', title: 'Velocista', desc: 'Termina el reto contrarreloj con buena puntuación' },
     { id: 'boss', icon: '🐉', title: 'Cazador de jefes', desc: 'Vence al jefe final' },
   ];
   function unlock(id) {
@@ -152,6 +163,10 @@
   }
 
   function renderHome() {
+    // Re-evaluate time-sensitive state every time we land on home.
+    maybeResetDaily();
+    maybeRefillHearts();
+
     state.level = levelFromXp(state.totalXp);
     $('helloName').textContent = state.name || 'amigo';
     $('levelLabel').textContent = state.level;
@@ -237,7 +252,17 @@
     }
     if (type === 'tf') {
       const wrong = Math.random() < 0.5;
-      const shown = wrong ? ans + (Math.random() < 0.5 ? -1 : 1) * rand(1, 5) : ans;
+      let shown = ans;
+      if (wrong) {
+        // Build a list of plausible wrong values that are positive and != ans
+        const candidates = [];
+        for (let d = -5; d <= 5; d++) {
+          if (d === 0) continue;
+          const c = ans + d;
+          if (c > 0) candidates.push(c);
+        }
+        shown = pick(candidates);
+      }
       return { type, a, b, ans, shown, isTrue: !wrong, prompt: '¿Es correcto?' };
     }
     return { type: 'choice', a, b, ans, opts: shuffle(uniqueOptions(ans, 4)), prompt: 'Selecciona la respuesta' };
@@ -415,7 +440,8 @@
       isCorrect = parseInt(lesson.currentSelection, 10) === q.ans;
     } else if (q.type === 'type') {
       if (!lesson.currentTyped) return;
-      isCorrect = parseInt(lesson.currentTyped, 10) === q.ans;
+      const n = Number(lesson.currentTyped);
+      isCorrect = Number.isInteger(n) && n === q.ans;
       const input = $('typeAnswer');
       if (input) {
         input.classList.add(isCorrect ? 'correct' : 'incorrect');
@@ -494,12 +520,19 @@
       : `La respuesta correcta es ${q.a} × ${q.b} = ${q.ans}`;
   }
 
+  // Stagger overlapping XP popups so they don't pile on top of each other
+  let xpPopActive = 0;
   function flashXp(amount) {
     const el = document.createElement('div');
     el.className = 'xp-pop';
+    el.style.top = (60 + xpPopActive * 38) + 'px';
+    xpPopActive++;
     el.innerHTML = `+${amount} XP ⭐`;
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1400);
+    setTimeout(() => {
+      el.remove();
+      xpPopActive = Math.max(0, xpPopActive - 1);
+    }, 1400);
   }
 
   function loseHeart() {
@@ -517,7 +550,10 @@
 
     if (state.hearts <= 0) {
       setTimeout(() => {
-        if (lesson && lesson.timerInt) clearInterval(lesson.timerInt);
+        if (lesson) {
+          if (lesson.timerInt) clearInterval(lesson.timerInt);
+          lesson.finished = true;
+        }
         showScreen('noHearts');
       }, 900);
     }
@@ -525,6 +561,7 @@
 
   function addXp(amount) {
     const oldLevel = state.level;
+    const oldDailyXp = state.dailyXp;
     state.totalXp += amount;
     state.dailyXp += amount;
     state.level = levelFromXp(state.totalXp);
@@ -533,6 +570,10 @@
     if (state.level > oldLevel) {
       sounds.levelUp();
       setTimeout(() => showToast(`🎆 ¡Nivel ${state.level}!`), 200);
+    }
+    if (oldDailyXp < 30 && state.dailyXp >= 30) {
+      sounds.levelUp();
+      setTimeout(() => showToast('🎯 ¡Meta diaria conseguida!'), 350);
     }
   }
 
@@ -545,8 +586,9 @@
     const acc = total === 0 ? 0 : Math.round((lesson.correct / total) * 100);
     const elapsed = Math.round((Date.now() - lesson.startTime) / 1000);
 
+    // Streak only updates on a day where the user actually got at least one answer right.
     const today = todayStr();
-    if (state.lastPlayDate !== today) {
+    if (state.lastPlayDate !== today && lesson.correct >= 1) {
       const d = daysBetween(state.lastPlayDate, today);
       if (d === 1) state.streak += 1;
       else if (d > 1 || !state.lastPlayDate) state.streak = 1;
@@ -579,7 +621,7 @@
     const mastered = Object.values(state.tables).filter(t => t.mastery >= 100).length;
     if (mastered >= 5) unlock('master_5');
     if (mastered >= 12) unlock('master_all');
-    if (lesson.timed && total >= 8) unlock('speed');
+    if (lesson.timed && total >= 8 && acc >= 70) unlock('speed');
     if (lesson.opts.mode === 'boss' && acc >= 80) unlock('boss');
 
     saveState();
@@ -619,8 +661,8 @@
     }
   }
 
-  // ---------- Achievements view ----------
   function renderAchievements() {
+    $('achievementCount').textContent = `${state.achievements.length}/${achievements.length}`;
     const list = $('achievementsList');
     list.innerHTML = '';
     achievements.forEach(a => {
@@ -641,15 +683,22 @@
 
   // ---------- Wiring (handlers attached ONCE; never reassigned) ----------
   function wire() {
-    $('startBtn').addEventListener('click', () => {
-      const name = $('nameInput').value.trim();
-      state.name = name || 'Crack';
+    // Welcome - validate name input before allowing start
+    const nameInput = $('nameInput');
+    const startBtn = $('startBtn');
+    nameInput.addEventListener('input', () => {
+      startBtn.disabled = !nameInput.value.trim();
+    });
+    startBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) return;
+      state.name = name.slice(0, 16);
       saveState();
       sounds.click();
       renderHome();
       showScreen('home');
     });
-    $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('startBtn').click(); });
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !startBtn.disabled) startBtn.click(); });
 
     $('homeBtn').addEventListener('click', () => {
       sounds.click();
@@ -676,6 +725,7 @@
     $('questionArea').addEventListener('click', onAreaClick);
 
     $('resultRetry').addEventListener('click', () => {
+      sounds.click();
       if (lesson) startLesson(lesson.opts);
     });
     $('resultContinue').addEventListener('click', () => {
@@ -701,21 +751,26 @@
     });
     $('backHomeBtn').addEventListener('click', () => { sounds.click(); renderHome(); showScreen('home'); });
 
+    // Settings
     $('soundToggle').checked = state.soundOn;
     $('vibrationToggle').checked = state.vibrationOn;
     $('soundToggle').addEventListener('change', (e) => { state.soundOn = e.target.checked; saveState(); });
     $('vibrationToggle').addEventListener('change', (e) => { state.vibrationOn = e.target.checked; saveState(); });
-    $('closeSettingsBtn').addEventListener('click', closeSettings);
-    $('changeNameBtn').addEventListener('click', () => {
-      const newName = prompt('Nuevo nombre:', state.name);
-      if (newName && newName.trim()) {
-        state.name = newName.trim().slice(0, 16);
+    $('settingName').addEventListener('change', (e) => {
+      const v = e.target.value.trim().slice(0, 16);
+      if (v) {
+        state.name = v;
         saveState();
         renderHome();
+      } else {
+        e.target.value = state.name;
       }
     });
+    $('closeSettingsBtn').addEventListener('click', closeSettings);
     $('resetBtn').addEventListener('click', () => {
       if (confirm('¿Seguro que quieres reiniciar TODO tu progreso? Esta acción no se puede deshacer.')) {
+        if (lesson && lesson.timerInt) clearInterval(lesson.timerInt);
+        lesson = null;
         localStorage.removeItem(STORAGE_KEY);
         state = defaultState();
         saveState();
@@ -725,7 +780,10 @@
     });
   }
 
-  function openSettings() { $('settingsModal').hidden = false; }
+  function openSettings() {
+    $('settingName').value = state.name || '';
+    $('settingsModal').hidden = false;
+  }
   function closeSettings() { $('settingsModal').hidden = true; }
 
   function init() {
@@ -737,6 +795,16 @@
       renderHome();
       showScreen('home');
     }
+    // Periodically refill hearts and roll over the day even if the page stays open
+    setInterval(() => {
+      let dirty = false;
+      if (maybeResetDaily()) dirty = true;
+      if (maybeRefillHearts()) dirty = true;
+      if (dirty) {
+        updateTopBar();
+        if (screens.home.classList.contains('active')) renderHome();
+      }
+    }, 60_000);
   }
 
   document.addEventListener('DOMContentLoaded', init);

@@ -45,7 +45,7 @@
         <h1 class="hero-title">¡Hola! Soy <span class="accent">Buho</span></h1>
         <p class="hero-sub">Vamos a dominar las tablas de multiplicar paso a paso. ¿Cómo te llamas?</p>
         <input class="name-input" id="nameInput" maxlength="16" placeholder="Escribe tu nombre" autocomplete="off" />
-        <button class="btn btn-primary" id="startBtn">¡Empezar!</button>
+        <button class="btn btn-primary" id="startBtn" disabled>¡Empezar!</button>
       </div>
     </section>
 
@@ -179,7 +179,7 @@
     <section class="screen" id="achievementsScreen">
       <div class="sub-header">
         <button class="close-btn" id="closeAchievementsBtn" aria-label="Volver">←</button>
-        <h2>🏆 Logros</h2>
+        <h2>🏆 Logros <span class="ach-count" id="achievementCount"></span></h2>
       </div>
       <div class="achievements" id="achievementsList"></div>
     </section>
@@ -200,6 +200,10 @@
       <div class="modal-content">
         <h2>⚙️ Ajustes</h2>
         <label class="setting-row">
+          <span>👤 Nombre</span>
+          <input type="text" id="settingName" class="setting-input" maxlength="16" autocomplete="off" />
+        </label>
+        <label class="setting-row">
           <span>🔊 Sonido</span>
           <input type="checkbox" id="soundToggle" checked />
         </label>
@@ -207,7 +211,6 @@
           <span>🎮 Vibración</span>
           <input type="checkbox" id="vibrationToggle" checked />
         </label>
-        <button class="btn btn-secondary" id="changeNameBtn">Cambiar nombre</button>
         <button class="btn btn-danger" id="resetBtn">Reiniciar progreso</button>
         <button class="btn btn-primary" id="closeSettingsBtn">Cerrar</button>
       </div>
