@@ -51,14 +51,12 @@
 
   let state = loadState();
 
-  // Reset daily XP if new day
   if (state.dailyDate !== todayStr()) {
     state.dailyXp = 0;
     state.dailyDate = todayStr();
     saveState();
   }
 
-  // Refill hearts if 30+ minutes passed since last loss
   function maybeRefillHearts() {
     if (state.hearts >= 5) return;
     const sinceLost = Date.now() - (state.heartsLostAt || 0);
@@ -143,14 +141,12 @@
     setTimeout(() => el.remove(), 1500);
   }
 
-  // ---------- Top bar ----------
   function updateTopBar() {
     $('streakCount').textContent = state.streak;
     $('xpCount').textContent = state.totalXp;
     $('heartsCount').textContent = state.hearts;
   }
 
-  // ---------- Home ----------
   function levelFromXp(xp) {
     return Math.max(1, Math.floor(xp / 100) + 1);
   }
@@ -179,7 +175,7 @@
         <div class="label">Tabla del ${n}</div>
         <div class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
       `;
-      tile.onclick = () => startLesson({ mode: 'table', table: n });
+      tile.addEventListener('click', () => startLesson({ mode: 'table', table: n }));
       grid.appendChild(tile);
     }
     updateTopBar();
@@ -235,7 +231,9 @@
     }
     if (type === 'missing') {
       const showA = Math.random() < 0.5;
-      return { type, a, b, ans, showA, prompt: 'Encuentra el número que falta' };
+      const target = showA ? b : a;
+      const opts = shuffle(uniqueOptions(target, 4));
+      return { type, a, b, ans, showA, target, opts, prompt: 'Encuentra el número que falta' };
     }
     if (type === 'tf') {
       const wrong = Math.random() < 0.5;
@@ -247,7 +245,8 @@
 
   function uniqueOptions(correct, count) {
     const set = new Set([correct]);
-    while (set.size < count) {
+    let safety = 50;
+    while (set.size < count && safety-- > 0) {
       const delta = rand(-9, 9);
       const cand = correct + delta;
       if (cand > 0 && cand !== correct) set.add(cand);
@@ -258,11 +257,14 @@
   // ---------- Lesson state ----------
   let lesson = null;
 
-  function setCheckBtn(label, enabled, handler) {
+  function showCheckBtn() {
     const btn = $('checkBtn');
-    btn.textContent = label;
-    btn.disabled = !enabled;
-    btn.onclick = handler;
+    btn.hidden = false;
+    btn.textContent = 'Comprobar';
+    btn.disabled = true;
+  }
+  function hideCheckBtn() {
+    $('checkBtn').hidden = true;
   }
 
   function startLesson(opts) {
@@ -297,7 +299,7 @@
     showScreen('game');
     $('combo').hidden = true;
     $('feedback').hidden = true;
-    setCheckBtn('Comprobar', false, submitAnswer);
+    showCheckBtn();
     if (isTimed) {
       $('timerBox').hidden = false;
       $('timerValue').textContent = lesson.timer;
@@ -332,7 +334,7 @@
     lesson.currentTyped = '';
     lesson.awaitingNext = false;
     $('feedback').hidden = true;
-    setCheckBtn('Comprobar', false, submitAnswer);
+    showCheckBtn();
     renderQuestion();
   }
 
@@ -348,66 +350,57 @@
         <div class="question-prompt">${q.prompt}</div>
         <div class="question-text">${q.a} × ${q.b}</div>
         <div class="choices">
-          ${q.opts.map(o => `<button class="choice" data-val="${o}">${o}</button>`).join('')}
+          ${q.opts.map(o => `<button type="button" class="choice" data-val="${o}">${o}</button>`).join('')}
         </div>
       `;
-      area.querySelectorAll('.choice').forEach(btn => {
-        btn.onclick = () => selectChoice(btn);
-      });
     } else if (q.type === 'type') {
       area.innerHTML = `
         <div class="question-prompt">${q.prompt}</div>
         <div class="question-text">${q.a} × ${q.b} = ?</div>
-        <input class="type-input" id="typeAnswer" type="number" inputmode="numeric" autocomplete="off" autofocus />
+        <input class="type-input" id="typeAnswer" type="number" inputmode="numeric" autocomplete="off" />
       `;
       const input = $('typeAnswer');
-      input.oninput = () => {
+      input.addEventListener('input', () => {
         lesson.currentTyped = input.value;
         $('checkBtn').disabled = !input.value.trim() || lesson.awaitingNext;
-      };
-      input.onkeydown = (e) => {
+      });
+      input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && input.value.trim() && !lesson.awaitingNext) submitAnswer();
-      };
+      });
       setTimeout(() => input.focus(), 50);
     } else if (q.type === 'missing') {
       const left = q.showA
         ? `${q.a} × <span class="blank">?</span>`
         : `<span class="blank">?</span> × ${q.b}`;
-      const target = q.showA ? q.b : q.a;
-      const opts = shuffle(uniqueOptions(target, 4));
-      lesson.questions[lesson.idx]._missingTarget = target;
-      lesson.questions[lesson.idx]._missingOpts = opts;
       area.innerHTML = `
         <div class="question-prompt">${q.prompt}</div>
         <div class="question-text">${left} = ${q.ans}</div>
         <div class="choices">
-          ${opts.map(o => `<button class="choice" data-val="${o}">${o}</button>`).join('')}
+          ${q.opts.map(o => `<button type="button" class="choice" data-val="${o}">${o}</button>`).join('')}
         </div>
       `;
-      area.querySelectorAll('.choice').forEach(btn => {
-        btn.onclick = () => selectChoice(btn);
-      });
     } else if (q.type === 'tf') {
       area.innerHTML = `
         <div class="question-prompt">${q.prompt}</div>
         <div class="question-text">${q.a} × ${q.b} = ${q.shown}</div>
         <div class="tf-choices">
-          <button class="choice" data-val="true"><span class="tf-icon">✅</span>Verdadero</button>
-          <button class="choice" data-val="false"><span class="tf-icon">❌</span>Falso</button>
+          <button type="button" class="choice" data-val="true"><span class="tf-icon">✅</span>Verdadero</button>
+          <button type="button" class="choice" data-val="false"><span class="tf-icon">❌</span>Falso</button>
         </div>
       `;
-      area.querySelectorAll('.choice').forEach(btn => {
-        btn.onclick = () => selectChoice(btn);
-      });
     }
   }
 
-  function selectChoice(btn) {
-    if (lesson.awaitingNext) return;
+  // Single delegated handler for all choice clicks (lives once on the area)
+  function onAreaClick(e) {
+    if (!lesson || lesson.awaitingNext) return;
+    const target = e.target.closest('.choice');
+    if (!target) return;
+    if (target.classList.contains('disabled')) return;
     const area = $('questionArea');
     area.querySelectorAll('.choice').forEach(c => c.classList.remove('selected'));
-    btn.classList.add('selected');
-    lesson.currentSelection = btn.dataset.val;
+    target.classList.add('selected');
+    lesson.currentSelection = target.dataset.val;
     $('checkBtn').disabled = false;
     sounds.click();
   }
@@ -415,17 +408,14 @@
   function submitAnswer() {
     if (!lesson || lesson.awaitingNext) return;
     const q = lesson.questions[lesson.idx];
-    let userAnswer = null;
     let isCorrect = false;
 
     if (q.type === 'choice') {
       if (lesson.currentSelection == null) return;
-      userAnswer = parseInt(lesson.currentSelection, 10);
-      isCorrect = userAnswer === q.ans;
+      isCorrect = parseInt(lesson.currentSelection, 10) === q.ans;
     } else if (q.type === 'type') {
       if (!lesson.currentTyped) return;
-      userAnswer = parseInt(lesson.currentTyped, 10);
-      isCorrect = userAnswer === q.ans;
+      isCorrect = parseInt(lesson.currentTyped, 10) === q.ans;
       const input = $('typeAnswer');
       if (input) {
         input.classList.add(isCorrect ? 'correct' : 'incorrect');
@@ -433,16 +423,13 @@
       }
     } else if (q.type === 'missing') {
       if (lesson.currentSelection == null) return;
-      userAnswer = parseInt(lesson.currentSelection, 10);
-      isCorrect = userAnswer === q._missingTarget;
+      isCorrect = parseInt(lesson.currentSelection, 10) === q.target;
     } else if (q.type === 'tf') {
       if (lesson.currentSelection == null) return;
-      const userBool = lesson.currentSelection === 'true';
-      isCorrect = userBool === q.isTrue;
-      userAnswer = lesson.currentSelection;
+      isCorrect = (lesson.currentSelection === 'true') === q.isTrue;
     }
 
-    // mark choice buttons
+    // Mark choice buttons visually
     if (q.type === 'choice' || q.type === 'missing' || q.type === 'tf') {
       const area = $('questionArea');
       area.querySelectorAll('.choice').forEach(c => {
@@ -452,7 +439,7 @@
           if ((v === 'true') === q.isTrue) c.classList.add('correct');
           else if (c.classList.contains('selected')) c.classList.add('incorrect');
         } else {
-          const target = q.type === 'missing' ? q._missingTarget : q.ans;
+          const target = q.type === 'missing' ? q.target : q.ans;
           if (parseInt(v, 10) === target) c.classList.add('correct');
           else if (c.classList.contains('selected')) c.classList.add('incorrect');
         }
@@ -488,7 +475,7 @@
     }
 
     lesson.awaitingNext = true;
-    setCheckBtn('Continuar', true, nextQuestion);
+    hideCheckBtn();
   }
 
   function showFeedback(correct, q) {
@@ -558,7 +545,6 @@
     const acc = total === 0 ? 0 : Math.round((lesson.correct / total) * 100);
     const elapsed = Math.round((Date.now() - lesson.startTime) / 1000);
 
-    // Update streak
     const today = todayStr();
     if (state.lastPlayDate !== today) {
       const d = daysBetween(state.lastPlayDate, today);
@@ -569,7 +555,6 @@
     if (state.streak >= 3) unlock('streak_3');
     if (state.streak >= 7) unlock('streak_7');
 
-    // Update table mastery
     if (lesson.opts.mode === 'table') {
       const t = state.tables[lesson.opts.table];
       t.lessonsDone += 1;
@@ -577,20 +562,17 @@
       const gain = Math.round(acc / 4);
       t.mastery = Math.min(100, t.mastery + gain);
     } else {
-      // mixed/timed/boss: small gain on all attempted
       Object.values(state.tables).forEach(t => {
         if (acc >= 70) t.mastery = Math.min(100, t.mastery + 1);
       });
     }
 
-    // Perfect bonus XP gets added to state and reflected on result screen
     if (acc === 100 && total > 0) {
       const bonus = 25;
       lesson.earnedXp += bonus;
       addXp(bonus);
     }
 
-    // Achievements
     unlock('first_lesson');
     if (acc === 100 && total > 0) unlock('perfect');
     if (state.hearts === lesson.heartsAtStart && lesson.correct > 0) unlock('no_hearts_win');
@@ -602,7 +584,6 @@
 
     saveState();
 
-    // Render result with the actual XP earned (matches what was added to state)
     $('resultXp').textContent = lesson.earnedXp;
     $('resultAccuracy').textContent = acc + '%';
     $('resultCombo').textContent = lesson.bestCombo;
@@ -658,21 +639,19 @@
     });
   }
 
-  // ---------- Wiring ----------
+  // ---------- Wiring (handlers attached ONCE; never reassigned) ----------
   function wire() {
-    // Welcome
-    $('startBtn').onclick = () => {
+    $('startBtn').addEventListener('click', () => {
       const name = $('nameInput').value.trim();
       state.name = name || 'Crack';
       saveState();
       sounds.click();
       renderHome();
       showScreen('home');
-    };
-    $('nameInput').onkeydown = (e) => { if (e.key === 'Enter') $('startBtn').click(); };
+    });
+    $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('startBtn').click(); });
 
-    // Top bar
-    $('homeBtn').onclick = () => {
+    $('homeBtn').addEventListener('click', () => {
       sounds.click();
       if (lesson && !lesson.finished) {
         if (!confirm('¿Quieres salir de la lección? Perderás tu progreso actual.')) return;
@@ -681,63 +660,61 @@
       }
       renderHome();
       showScreen('home');
-    };
-    $('settingsBtn').onclick = () => { sounds.click(); openSettings(); };
+    });
+    $('settingsBtn').addEventListener('click', () => { sounds.click(); openSettings(); });
 
-    // Quick modes
     document.querySelectorAll('[data-mode]').forEach(btn => {
-      btn.onclick = () => startLesson({ mode: btn.dataset.mode });
+      btn.addEventListener('click', () => startLesson({ mode: btn.dataset.mode }));
     });
 
-    // Game
-    $('checkBtn').onclick = submitAnswer;
-    $('continueBtn').onclick = nextQuestion;
-    $('closeGameBtn').onclick = () => $('homeBtn').click();
+    // Single, permanent handlers for the two game-action buttons
+    $('checkBtn').addEventListener('click', submitAnswer);
+    $('continueBtn').addEventListener('click', nextQuestion);
+    $('closeGameBtn').addEventListener('click', () => $('homeBtn').click());
 
-    // Result
-    $('resultRetry').onclick = () => {
+    // Delegated click handler for choice buttons — survives innerHTML swaps
+    $('questionArea').addEventListener('click', onAreaClick);
+
+    $('resultRetry').addEventListener('click', () => {
       if (lesson) startLesson(lesson.opts);
-    };
-    $('resultContinue').onclick = () => {
+    });
+    $('resultContinue').addEventListener('click', () => {
       sounds.click();
       renderHome();
       showScreen('home');
-    };
+    });
 
-    // Achievements
-    $('viewAchievements').onclick = () => {
+    $('viewAchievements').addEventListener('click', () => {
       sounds.click();
       renderAchievements();
       showScreen('achievements');
-    };
-    $('closeAchievementsBtn').onclick = () => { sounds.click(); showScreen('home'); };
+    });
+    $('closeAchievementsBtn').addEventListener('click', () => { sounds.click(); showScreen('home'); });
 
-    // No hearts
-    $('refillBtn').onclick = () => {
+    $('refillBtn').addEventListener('click', () => {
       state.hearts = 5;
       saveState();
       updateTopBar();
       sounds.levelUp();
       renderHome();
       showScreen('home');
-    };
-    $('backHomeBtn').onclick = () => { sounds.click(); renderHome(); showScreen('home'); };
+    });
+    $('backHomeBtn').addEventListener('click', () => { sounds.click(); renderHome(); showScreen('home'); });
 
-    // Settings
     $('soundToggle').checked = state.soundOn;
     $('vibrationToggle').checked = state.vibrationOn;
-    $('soundToggle').onchange = (e) => { state.soundOn = e.target.checked; saveState(); };
-    $('vibrationToggle').onchange = (e) => { state.vibrationOn = e.target.checked; saveState(); };
-    $('closeSettingsBtn').onclick = closeSettings;
-    $('changeNameBtn').onclick = () => {
+    $('soundToggle').addEventListener('change', (e) => { state.soundOn = e.target.checked; saveState(); });
+    $('vibrationToggle').addEventListener('change', (e) => { state.vibrationOn = e.target.checked; saveState(); });
+    $('closeSettingsBtn').addEventListener('click', closeSettings);
+    $('changeNameBtn').addEventListener('click', () => {
       const newName = prompt('Nuevo nombre:', state.name);
       if (newName && newName.trim()) {
         state.name = newName.trim().slice(0, 16);
         saveState();
         renderHome();
       }
-    };
-    $('resetBtn').onclick = () => {
+    });
+    $('resetBtn').addEventListener('click', () => {
       if (confirm('¿Seguro que quieres reiniciar TODO tu progreso? Esta acción no se puede deshacer.')) {
         localStorage.removeItem(STORAGE_KEY);
         state = defaultState();
@@ -745,13 +722,12 @@
         closeSettings();
         showScreen('welcome');
       }
-    };
+    });
   }
 
   function openSettings() { $('settingsModal').hidden = false; }
   function closeSettings() { $('settingsModal').hidden = true; }
 
-  // ---------- Init ----------
   function init() {
     wire();
     updateTopBar();
