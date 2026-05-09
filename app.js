@@ -258,6 +258,13 @@
   // ---------- Lesson state ----------
   let lesson = null;
 
+  function setCheckBtn(label, enabled, handler) {
+    const btn = $('checkBtn');
+    btn.textContent = label;
+    btn.disabled = !enabled;
+    btn.onclick = handler;
+  }
+
   function startLesson(opts) {
     if (state.hearts <= 0) {
       showScreen('noHearts');
@@ -276,6 +283,7 @@
       answered: 0,
       combo: 0,
       bestCombo: 0,
+      earnedXp: 0,
       heartsAtStart: state.hearts,
       startTime: Date.now(),
       timed: isTimed,
@@ -284,9 +292,12 @@
       currentSelection: null,
       currentTyped: '',
       finished: false,
+      awaitingNext: false,
     };
     showScreen('game');
     $('combo').hidden = true;
+    $('feedback').hidden = true;
+    setCheckBtn('Comprobar', false, submitAnswer);
     if (isTimed) {
       $('timerBox').hidden = false;
       $('timerValue').textContent = lesson.timer;
@@ -306,6 +317,7 @@
   }
 
   function nextQuestion() {
+    if (!lesson) return;
     if (lesson.timed) {
       lesson.questions = [makeQuestion(pick(['choice', 'choice', 'type', 'missing', 'tf']), rand(2, 9), rand(2, 12))];
       lesson.idx = 0;
@@ -318,9 +330,9 @@
     }
     lesson.currentSelection = null;
     lesson.currentTyped = '';
+    lesson.awaitingNext = false;
     $('feedback').hidden = true;
-    $('checkBtn').disabled = true;
-    $('checkBtn').textContent = 'Comprobar';
+    setCheckBtn('Comprobar', false, submitAnswer);
     renderQuestion();
   }
 
@@ -351,10 +363,10 @@
       const input = $('typeAnswer');
       input.oninput = () => {
         lesson.currentTyped = input.value;
-        $('checkBtn').disabled = !input.value.trim();
+        $('checkBtn').disabled = !input.value.trim() || lesson.awaitingNext;
       };
       input.onkeydown = (e) => {
-        if (e.key === 'Enter' && input.value.trim()) submitAnswer();
+        if (e.key === 'Enter' && input.value.trim() && !lesson.awaitingNext) submitAnswer();
       };
       setTimeout(() => input.focus(), 50);
     } else if (q.type === 'missing') {
@@ -391,6 +403,7 @@
   }
 
   function selectChoice(btn) {
+    if (lesson.awaitingNext) return;
     const area = $('questionArea');
     area.querySelectorAll('.choice').forEach(c => c.classList.remove('selected'));
     btn.classList.add('selected');
@@ -400,14 +413,17 @@
   }
 
   function submitAnswer() {
+    if (!lesson || lesson.awaitingNext) return;
     const q = lesson.questions[lesson.idx];
     let userAnswer = null;
     let isCorrect = false;
 
     if (q.type === 'choice') {
+      if (lesson.currentSelection == null) return;
       userAnswer = parseInt(lesson.currentSelection, 10);
       isCorrect = userAnswer === q.ans;
     } else if (q.type === 'type') {
+      if (!lesson.currentTyped) return;
       userAnswer = parseInt(lesson.currentTyped, 10);
       isCorrect = userAnswer === q.ans;
       const input = $('typeAnswer');
@@ -416,9 +432,11 @@
         input.disabled = true;
       }
     } else if (q.type === 'missing') {
+      if (lesson.currentSelection == null) return;
       userAnswer = parseInt(lesson.currentSelection, 10);
       isCorrect = userAnswer === q._missingTarget;
     } else if (q.type === 'tf') {
+      if (lesson.currentSelection == null) return;
       const userBool = lesson.currentSelection === 'true';
       isCorrect = userBool === q.isTrue;
       userAnswer = lesson.currentSelection;
@@ -455,6 +473,7 @@
       sounds.correct();
       vibrate(30);
       const xpGain = 10 + Math.min(10, lesson.combo);
+      lesson.earnedXp += xpGain;
       addXp(xpGain);
       flashXp(xpGain);
       confetti(28);
@@ -468,9 +487,8 @@
       showFeedback(false, q);
     }
 
-    $('checkBtn').textContent = 'Continuar';
-    $('checkBtn').disabled = false;
-    $('checkBtn').onclick = nextQuestion;
+    lesson.awaitingNext = true;
+    setCheckBtn('Continuar', true, nextQuestion);
   }
 
   function showFeedback(correct, q) {
@@ -565,6 +583,13 @@
       });
     }
 
+    // Perfect bonus XP gets added to state and reflected on result screen
+    if (acc === 100 && total > 0) {
+      const bonus = 25;
+      lesson.earnedXp += bonus;
+      addXp(bonus);
+    }
+
     // Achievements
     unlock('first_lesson');
     if (acc === 100 && total > 0) unlock('perfect');
@@ -577,9 +602,8 @@
 
     saveState();
 
-    // Render result
-    const earnedXp = lesson.correct * 12 + (acc === 100 ? 25 : 0);
-    $('resultXp').textContent = earnedXp;
+    // Render result with the actual XP earned (matches what was added to state)
+    $('resultXp').textContent = lesson.earnedXp;
     $('resultAccuracy').textContent = acc + '%';
     $('resultCombo').textContent = lesson.bestCombo;
     $('resultTime').textContent = elapsed + 's';
