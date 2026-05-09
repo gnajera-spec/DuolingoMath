@@ -41,7 +41,6 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
       const parsed = JSON.parse(raw);
-      // Drop legacy tables outside 1..TABLES_COUNT, fill any gaps with defaults
       const cleanTables = {};
       const fresh = defaultState().tables;
       for (let i = 1; i <= TABLES_COUNT; i++) {
@@ -139,7 +138,6 @@
     showToast(`🏆 ¡Logro desbloqueado!`);
   }
 
-  // ---------- DOM helpers ----------
   const $ = (id) => document.getElementById(id);
   const screens = ['welcome', 'home', 'game', 'result', 'achievements', 'noHearts']
     .reduce((acc, k) => (acc[k] = $(k + 'Screen'), acc), {});
@@ -184,6 +182,7 @@
       const t = state.tables[n];
       const tile = document.createElement('button');
       tile.className = 'table-tile';
+      tile.setAttribute('aria-label', `Tabla del ${n}`);
       const stars = Math.min(3, Math.floor(t.mastery / 33.34));
       if (t.mastery >= 100) tile.classList.add('mastered');
       else if (t.mastery >= 60) tile.classList.add('completed');
@@ -192,7 +191,6 @@
       tile.innerHTML = `
         ${t.mastery >= 100 ? '<span class="crown">★</span>' : ''}
         <div class="num">×${n}</div>
-        <div class="label">Tabla del ${n}</div>
         <div class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
       `;
       tile.addEventListener('click', () => startLesson({ mode: 'table', table: n }));
@@ -213,8 +211,6 @@
     return a;
   }
 
-  // Generates `total` questions guaranteeing no (a,b) pair repeats within the lesson.
-  // For table mode, the b factor cycles a fresh shuffle of 1..MAX_FACTOR every round.
   function buildLesson(opts) {
     const total = opts.total || 10;
     const types = ['choice', 'choice', 'type', 'missing', 'tf'];
@@ -227,7 +223,6 @@
       let pool = [];
       for (let i = 0; i < total; i++) {
         if (pool.length === 0) {
-          // Refill with a new shuffle so even on repeat rounds the order changes
           pool = shuffle(Array.from({ length: maxB - minB + 1 }, (_, k) => k + minB));
         }
         const b = pool.shift();
@@ -244,7 +239,6 @@
         used.add(key);
         questions.push(makeQuestion(pick(types), a, b));
       }
-      // Pool exhausted (rare): allow repeats to fill the rest
       while (questions.length < total) {
         const a = chooseFactor(opts);
         const b = rand(minB, maxB);
@@ -352,7 +346,7 @@
       currentTyped: '',
       finished: false,
       awaitingNext: false,
-      recentKeys: [], // for timed mode, avoid immediate repeats
+      recentKeys: [],
     };
     showScreen('game');
     $('combo').hidden = true;
@@ -377,7 +371,6 @@
   }
 
   function freshTimedQuestion() {
-    // Avoid repeating any of the last 8 (a,b) pairs in timed mode
     let safety = 50;
     while (safety-- > 0) {
       const a = rand(2, MAX_FACTOR);
@@ -685,7 +678,6 @@
     if (acc >= 70) confetti(80);
   }
 
-  // ---------- Confetti ----------
   const colors = ['#58CC02', '#FFC800', '#1CB0F6', '#CE82FF', '#FF4B4B', '#FF9600'];
   function confetti(amount = 40) {
     const container = $('confettiContainer');

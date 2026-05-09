@@ -29,6 +29,7 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+  min-width: 0;
 }
 
 [hidden] { display: none !important; }
@@ -64,6 +65,7 @@ input { font-family: inherit; }
 .app {
   max-width: 520px;
   margin: 0 auto;
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg);
@@ -71,6 +73,7 @@ input { font-family: inherit; }
   display: flex;
   flex-direction: column;
   box-shadow: 0 0 40px rgba(0,0,0,0.06);
+  overflow-x: hidden;
 }
 
 @media (min-width: 600px) {
@@ -83,7 +86,6 @@ input { font-family: inherit; }
   }
 }
 
-/* Top bar */
 .top-bar {
   display: flex;
   align-items: center;
@@ -128,10 +130,9 @@ input { font-family: inherit; }
 .icon-btn:hover { background: var(--bg-soft); }
 .icon-btn:active { transform: scale(0.95); }
 
-/* Screens */
 .screen {
   flex: 1;
-  padding: 16px 16px 20px;
+  padding: 16px 12px 20px;
   display: none;
   flex-direction: column;
   animation: fadeSlide 0.3s ease-out;
@@ -143,7 +144,6 @@ input { font-family: inherit; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -162,7 +162,6 @@ input { font-family: inherit; }
   min-height: 50px;
 }
 .btn + .btn { margin-top: 10px; }
-
 .btn-primary {
   background: var(--primary);
   color: white;
@@ -193,7 +192,6 @@ input { font-family: inherit; }
 }
 .btn-danger:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--red-dark); }
 
-/* Welcome */
 .welcome {
   text-align: center;
   padding: 24px 8px 8px;
@@ -238,7 +236,6 @@ input { font-family: inherit; }
 .name-input:focus { border-color: var(--blue); }
 .welcome .btn { max-width: 320px; }
 
-/* Home (compact to fit on a single screen without scroll) */
 .home-greeting {
   display: flex;
   align-items: center;
@@ -309,7 +306,7 @@ input { font-family: inherit; }
 
 .quick-modes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .quick-mode {
@@ -323,6 +320,7 @@ input { font-family: inherit; }
   gap: 2px;
   box-shadow: 0 4px 0 var(--border);
   transition: transform 0.08s, box-shadow 0.08s;
+  min-width: 0;
 }
 .quick-mode:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--border); }
 .qm-label { font-size: 13px; font-weight: 900; }
@@ -334,20 +332,22 @@ input { font-family: inherit; }
 .quick-mode.orange { border-color: var(--orange); box-shadow: 0 4px 0 var(--orange-dark); }
 .quick-mode.orange:active { box-shadow: 0 2px 0 var(--orange-dark); }
 
-/* Tables grid: 5 columns x 2 rows so all 10 fit on a single screen */
+/* Tables grid: 5 columns x 2 rows. minmax(0, 1fr) prevents columns from
+   growing beyond their fair share when their content min-size exceeds it. */
 .tables-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
 }
 @media (max-width: 340px) {
-  .tables-grid { grid-template-columns: repeat(4, 1fr); }
+  .tables-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .table-tile {
   aspect-ratio: 1;
   border: 2px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: white;
   display: flex;
   flex-direction: column;
@@ -356,13 +356,14 @@ input { font-family: inherit; }
   position: relative;
   box-shadow: 0 4px 0 var(--border);
   transition: transform 0.08s, box-shadow 0.08s;
-  padding: 4px;
-  gap: 1px;
+  padding: 2px;
+  gap: 2px;
+  min-width: 0;
+  overflow: visible;
 }
 .table-tile:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--border); }
-.table-tile .num { font-size: clamp(20px, 5.5vw, 26px); font-weight: 900; line-height: 1; }
-.table-tile .label { font-size: 8px; color: var(--text-light); font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
-.table-tile .stars { display: flex; gap: 1px; margin-top: 1px; font-size: 9px; }
+.table-tile .num { font-size: clamp(18px, 5vw, 26px); font-weight: 900; line-height: 1; }
+.table-tile .stars { display: flex; gap: 1px; margin-top: 2px; font-size: 9px; line-height: 1; }
 .table-tile.in-progress { border-color: var(--yellow); box-shadow: 0 4px 0 #E0AE00; }
 .table-tile.completed {
   background: linear-gradient(180deg, var(--primary-light), var(--primary));
@@ -370,7 +371,6 @@ input { font-family: inherit; }
   border-color: var(--primary-dark);
   box-shadow: 0 4px 0 var(--primary-dark);
 }
-.table-tile.completed .label,
 .table-tile.completed .stars { color: rgba(255,255,255,0.9); }
 .table-tile.mastered {
   background: linear-gradient(180deg, #FFD940, var(--orange));
@@ -384,14 +384,13 @@ input { font-family: inherit; }
   right: -4px;
   background: var(--yellow);
   color: white;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 999px;
   border: 2px solid white;
 }
 
-/* Game header */
 .game-header {
   display: flex;
   align-items: center;
@@ -468,7 +467,6 @@ input { font-family: inherit; }
   50% { transform: scale(1.06); }
 }
 
-/* Question */
 .question-area {
   flex: 1;
   display: flex;
@@ -595,14 +593,13 @@ input { font-family: inherit; }
   padding-top: 12px;
 }
 
-/* Feedback bar */
 .feedback {
   position: sticky;
   bottom: 0;
   left: 0;
   right: 0;
-  margin: 16px -16px -20px;
-  padding: 16px 16px 28px;
+  margin: 16px -12px -20px;
+  padding: 16px 12px 28px;
   padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px));
   background: white;
   border-top: 2px solid var(--border);
@@ -629,7 +626,6 @@ input { font-family: inherit; }
 .feedback.correct .feedback-sub { color: var(--primary-dark); }
 .feedback.incorrect .feedback-sub { color: var(--red-dark); }
 
-/* Result */
 .result-hero {
   text-align: center;
   margin: 12px 0 20px;
@@ -660,7 +656,6 @@ input { font-family: inherit; }
 .result-actions { display: flex; gap: 10px; margin-top: auto; }
 .result-actions .btn { margin-top: 0; }
 
-/* Achievements */
 .sub-header {
   display: flex;
   align-items: center;
@@ -710,7 +705,6 @@ input { font-family: inherit; }
 .achievement-title { font-size: 15px; font-weight: 900; }
 .achievement-desc { font-size: 12px; color: var(--text-light); font-weight: 700; }
 
-/* Modal */
 .modal {
   position: fixed;
   inset: 0;
@@ -790,7 +784,6 @@ input { font-family: inherit; }
 }
 .setting-row input[type="checkbox"]:checked::after { transform: translateX(18px); }
 
-/* Confetti */
 .confetti-container {
   position: fixed;
   inset: 0;
@@ -814,7 +807,6 @@ input { font-family: inherit; }
   }
 }
 
-/* Floating XP indicator */
 .xp-pop {
   position: fixed;
   top: 60px;
@@ -837,7 +829,6 @@ input { font-family: inherit; }
   100% { transform: translate(-50%, -40px); opacity: 0; }
 }
 
-/* Heart loss animation */
 .heart-lost {
   position: fixed;
   top: 50%;
