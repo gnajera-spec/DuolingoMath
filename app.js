@@ -4,6 +4,9 @@
 
   // ---------- Storage ----------
   const STORAGE_KEY = 'mathlingo:v1';
+  const TABLES_COUNT = 10;
+  const MAX_FACTOR = 10;
+
   const defaultState = () => ({
     name: '',
     level: 1,
@@ -17,7 +20,7 @@
     soundOn: true,
     vibrationOn: true,
     tables: Object.fromEntries(
-      Array.from({ length: 12 }, (_, i) => [i + 1, { mastery: 0, lessonsDone: 0, bestAccuracy: 0 }])
+      Array.from({ length: TABLES_COUNT }, (_, i) => [i + 1, { mastery: 0, lessonsDone: 0, bestAccuracy: 0 }])
     ),
     achievements: [],
   });
@@ -38,9 +41,13 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
       const parsed = JSON.parse(raw);
-      return Object.assign(defaultState(), parsed, {
-        tables: Object.assign(defaultState().tables, parsed.tables || {}),
-      });
+      // Drop legacy tables outside 1..TABLES_COUNT, fill any gaps with defaults
+      const cleanTables = {};
+      const fresh = defaultState().tables;
+      for (let i = 1; i <= TABLES_COUNT; i++) {
+        cleanTables[i] = (parsed.tables && parsed.tables[i]) ? parsed.tables[i] : fresh[i];
+      }
+      return Object.assign(defaultState(), parsed, { tables: cleanTables });
     } catch {
       return defaultState();
     }
@@ -80,7 +87,6 @@
     if (!audioCtx) {
       try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
     }
-    // iOS Safari starts the context suspended; resume after a user gesture.
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume().catch(() => {});
     }
@@ -163,7 +169,6 @@
   }
 
   function renderHome() {
-    // Re-evaluate time-sensitive state every time we land on home.
     maybeResetDaily();
     maybeRefillHearts();
 
@@ -175,7 +180,7 @@
 
     const grid = $('tablesGrid');
     grid.innerHTML = '';
-    for (let n = 1; n <= 12; n++) {
+    for (let n = 1; n <= TABLES_COUNT; n++) {
       const t = state.tables[n];
       const tile = document.createElement('button');
       tile.className = 'table-tile';
@@ -208,15 +213,43 @@
     return a;
   }
 
+  // Generates `total` questions guaranteeing no (a,b) pair repeats within the lesson.
+  // For table mode, the b factor cycles a fresh shuffle of 1..MAX_FACTOR every round.
   function buildLesson(opts) {
     const total = opts.total || 10;
     const types = ['choice', 'choice', 'type', 'missing', 'tf'];
     const questions = [];
-    for (let i = 0; i < total; i++) {
-      const a = chooseFactor(opts);
-      const b = rand(opts.minB ?? 1, opts.maxB ?? 12);
-      const type = pick(types);
-      questions.push(makeQuestion(type, a, b));
+    const minB = opts.minB ?? 1;
+    const maxB = opts.maxB ?? MAX_FACTOR;
+
+    if (opts.mode === 'table') {
+      const a = opts.table;
+      let pool = [];
+      for (let i = 0; i < total; i++) {
+        if (pool.length === 0) {
+          // Refill with a new shuffle so even on repeat rounds the order changes
+          pool = shuffle(Array.from({ length: maxB - minB + 1 }, (_, k) => k + minB));
+        }
+        const b = pool.shift();
+        questions.push(makeQuestion(pick(types), a, b));
+      }
+    } else {
+      const used = new Set();
+      let safety = total * 8;
+      while (questions.length < total && safety-- > 0) {
+        const a = chooseFactor(opts);
+        const b = rand(minB, maxB);
+        const key = `${a}x${b}`;
+        if (used.has(key)) continue;
+        used.add(key);
+        questions.push(makeQuestion(pick(types), a, b));
+      }
+      // Pool exhausted (rare): allow repeats to fill the rest
+      while (questions.length < total) {
+        const a = chooseFactor(opts);
+        const b = rand(minB, maxB);
+        questions.push(makeQuestion(pick(types), a, b));
+      }
     }
     return questions;
   }
@@ -230,9 +263,9 @@
       const pool = unlocked.length ? unlocked : [2, 3, 4, 5];
       return pick(pool);
     }
-    if (opts.mode === 'timed') return rand(2, 9);
-    if (opts.mode === 'boss') return rand(2, 12);
-    return rand(2, 9);
+    if (opts.mode === 'timed') return rand(2, MAX_FACTOR);
+    if (opts.mode === 'boss') return rand(2, MAX_FACTOR);
+    return rand(2, MAX_FACTOR);
   }
 
   function makeQuestion(type, a, b) {
@@ -254,7 +287,6 @@
       const wrong = Math.random() < 0.5;
       let shown = ans;
       if (wrong) {
-        // Build a list of plausible wrong values that are positive and != ans
         const candidates = [];
         for (let d = -5; d <= 5; d++) {
           if (d === 0) continue;
@@ -320,6 +352,7 @@
       currentTyped: '',
       finished: false,
       awaitingNext: false,
+      recentKeys: [], // for timed mode, avoid immediate repeats
     };
     showScreen('game');
     $('combo').hidden = true;
@@ -343,10 +376,25 @@
     renderQuestion();
   }
 
+  function freshTimedQuestion() {
+    // Avoid repeating any of the last 8 (a,b) pairs in timed mode
+    let safety = 50;
+    while (safety-- > 0) {
+      const a = rand(2, MAX_FACTOR);
+      const b = rand(1, MAX_FACTOR);
+      const key = `${a}x${b}`;
+      if (lesson.recentKeys.includes(key)) continue;
+      lesson.recentKeys.push(key);
+      if (lesson.recentKeys.length > 8) lesson.recentKeys.shift();
+      return makeQuestion(pick(['choice', 'choice', 'type', 'missing', 'tf']), a, b);
+    }
+    return makeQuestion(pick(['choice', 'choice', 'type', 'missing', 'tf']), rand(2, MAX_FACTOR), rand(1, MAX_FACTOR));
+  }
+
   function nextQuestion() {
     if (!lesson) return;
     if (lesson.timed) {
-      lesson.questions = [makeQuestion(pick(['choice', 'choice', 'type', 'missing', 'tf']), rand(2, 9), rand(2, 12))];
+      lesson.questions = [freshTimedQuestion()];
       lesson.idx = 0;
     } else {
       lesson.idx++;
@@ -416,7 +464,6 @@
     }
   }
 
-  // Single delegated handler for all choice clicks (lives once on the area)
   function onAreaClick(e) {
     if (!lesson || lesson.awaitingNext) return;
     const target = e.target.closest('.choice');
@@ -455,7 +502,6 @@
       isCorrect = (lesson.currentSelection === 'true') === q.isTrue;
     }
 
-    // Mark choice buttons visually
     if (q.type === 'choice' || q.type === 'missing' || q.type === 'tf') {
       const area = $('questionArea');
       area.querySelectorAll('.choice').forEach(c => {
@@ -520,7 +566,6 @@
       : `La respuesta correcta es ${q.a} × ${q.b} = ${q.ans}`;
   }
 
-  // Stagger overlapping XP popups so they don't pile on top of each other
   let xpPopActive = 0;
   function flashXp(amount) {
     const el = document.createElement('div');
@@ -586,7 +631,6 @@
     const acc = total === 0 ? 0 : Math.round((lesson.correct / total) * 100);
     const elapsed = Math.round((Date.now() - lesson.startTime) / 1000);
 
-    // Streak only updates on a day where the user actually got at least one answer right.
     const today = todayStr();
     if (state.lastPlayDate !== today && lesson.correct >= 1) {
       const d = daysBetween(state.lastPlayDate, today);
@@ -620,7 +664,7 @@
     if (state.hearts === lesson.heartsAtStart && lesson.correct > 0) unlock('no_hearts_win');
     const mastered = Object.values(state.tables).filter(t => t.mastery >= 100).length;
     if (mastered >= 5) unlock('master_5');
-    if (mastered >= 12) unlock('master_all');
+    if (mastered >= TABLES_COUNT) unlock('master_all');
     if (lesson.timed && total >= 8 && acc >= 70) unlock('speed');
     if (lesson.opts.mode === 'boss' && acc >= 80) unlock('boss');
 
@@ -681,9 +725,7 @@
     });
   }
 
-  // ---------- Wiring (handlers attached ONCE; never reassigned) ----------
   function wire() {
-    // Welcome - validate name input before allowing start
     const nameInput = $('nameInput');
     const startBtn = $('startBtn');
     nameInput.addEventListener('input', () => {
@@ -716,12 +758,10 @@
       btn.addEventListener('click', () => startLesson({ mode: btn.dataset.mode }));
     });
 
-    // Single, permanent handlers for the two game-action buttons
     $('checkBtn').addEventListener('click', submitAnswer);
     $('continueBtn').addEventListener('click', nextQuestion);
     $('closeGameBtn').addEventListener('click', () => $('homeBtn').click());
 
-    // Delegated click handler for choice buttons — survives innerHTML swaps
     $('questionArea').addEventListener('click', onAreaClick);
 
     $('resultRetry').addEventListener('click', () => {
@@ -751,7 +791,6 @@
     });
     $('backHomeBtn').addEventListener('click', () => { sounds.click(); renderHome(); showScreen('home'); });
 
-    // Settings
     $('soundToggle').checked = state.soundOn;
     $('vibrationToggle').checked = state.vibrationOn;
     $('soundToggle').addEventListener('change', (e) => { state.soundOn = e.target.checked; saveState(); });
@@ -795,7 +834,6 @@
       renderHome();
       showScreen('home');
     }
-    // Periodically refill hearts and roll over the day even if the page stays open
     setInterval(() => {
       let dirty = false;
       if (maybeResetDaily()) dirty = true;
