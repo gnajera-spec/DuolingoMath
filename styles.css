@@ -44,6 +44,7 @@ body {
   color: var(--text);
   background: linear-gradient(180deg, #F7F7F7 0%, #ECECEC 100%);
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   font-size: 16px;
@@ -67,6 +68,7 @@ input {
   max-width: 520px;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   position: relative;
   display: flex;
@@ -82,6 +84,7 @@ input {
     border-radius: 24px;
     overflow: hidden;
     min-height: calc(100vh - 32px);
+    min-height: calc(100dvh - 32px);
   }
 }
 
@@ -634,14 +637,16 @@ input {
   padding-top: 12px;
 }
 
-/* Feedback bar */
+/* Feedback bar - always anchored above the iOS Safari toolbar / home indicator */
 .feedback {
   position: sticky;
   bottom: 0;
   left: 0;
   right: 0;
   margin: 16px -18px -24px;
-  padding: 16px 18px 24px;
+  padding: 16px 18px 28px;
+  /* Reserve room for the iOS dynamic toolbar + home indicator + extra cushion. */
+  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px));
   background: white;
   border-top: 2px solid var(--border);
   animation: slideUp 0.3s ease-out;
