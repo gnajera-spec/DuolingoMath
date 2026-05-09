@@ -166,6 +166,15 @@
     return Math.max(1, Math.floor(xp / 100) + 1);
   }
 
+  // Map mastery (0-100) to star count using rewarding thresholds:
+  // any practice -> 1 star, sustained practice -> 2 stars, mastered -> 3 stars
+  function masteryStars(mastery) {
+    if (mastery >= 90) return 3;
+    if (mastery >= 60) return 2;
+    if (mastery >= 20) return 1;
+    return 0;
+  }
+
   function renderHome() {
     maybeResetDaily();
     maybeRefillHearts();
@@ -183,15 +192,19 @@
       const tile = document.createElement('button');
       tile.className = 'table-tile';
       tile.setAttribute('aria-label', `Tabla del ${n}`);
-      const stars = Math.min(3, Math.floor(t.mastery / 33.34));
+      const stars = masteryStars(t.mastery);
       if (t.mastery >= 100) tile.classList.add('mastered');
       else if (t.mastery >= 60) tile.classList.add('completed');
       else if (t.mastery > 0) tile.classList.add('in-progress');
 
+      const starsHtml = Array.from({ length: 3 }, (_, i) =>
+        `<span class="star${i < stars ? ' filled' : ''}">★</span>`
+      ).join('');
+
       tile.innerHTML = `
         ${t.mastery >= 100 ? '<span class="crown">★</span>' : ''}
         <div class="num">×${n}</div>
-        <div class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+        <div class="stars">${starsHtml}</div>
       `;
       tile.addEventListener('click', () => startLesson({ mode: 'table', table: n }));
       grid.appendChild(tile);
@@ -638,7 +651,9 @@
       const t = state.tables[lesson.opts.table];
       t.lessonsDone += 1;
       t.bestAccuracy = Math.max(t.bestAccuracy, acc);
-      const gain = Math.round(acc / 4);
+      // Rewarding gain so 1 perfect lesson clears the first star threshold (>=20),
+      // 2 perfect lessons reach the 2nd (>=60) and 3 reach the 3rd (>=90).
+      const gain = Math.round(acc / 3);
       t.mastery = Math.min(100, t.mastery + gain);
     } else {
       Object.values(state.tables).forEach(t => {
